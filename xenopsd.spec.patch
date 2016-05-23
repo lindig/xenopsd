@@ -1,0 +1,216 @@
+*** xenopsd.spec	2016-05-23 14:30:01.671084474 +0100
+--- xenopsd.spec.coverage	2016-05-23 14:28:26.590812057 +0100
+***************
+*** 47,102 ****
+  %description
+  Simple VM manager for the xapi toolstack.
+  
+! %package        xc
+  Summary:        Xenopsd using xc
+  Requires:       %{name} = %{version}-%{release}
+  Requires:       forkexecd
+  Requires:       xen-libs
+  
+! %description    xc
+  Simple VM manager for Xen using libxc.
+  
+! %package        xc-cov
+  Summary:        Xenopsd using xc
+  Requires:       %{name} = %{version}-%{release}
+  Requires:       forkexecd
+  Requires:       xen-libs
+  
+! %description    xc-cov
+  Simple VM manager for Xen using libxc with coverage
+  profiling.
+  
+  
+! %package        simulator
+  Summary:        Xenopsd simulator
+  Requires:       %{name} = %{version}-%{release}
+  
+! %description    simulator
+  A synthetic VM manager for testing.
+  
+! %package        simulator-cov
+  Summary:        Xenopsd simulator
+  Requires:       %{name} = %{version}-%{release}
+  
+! %description    simulator-cov
+  A synthetic VM manager for testing with coverage profiling.
+  
+  
+  
+! %package        xenlight
+  Summary:        Xenopsd using libxenlight
+  Group:          Development/Other
+  Requires:       %{name} = %{version}-%{release}
+  
+! %description    xenlight
+  Simple VM manager for Xen using libxenlight
+  
+! %package        xenlight-cov
+  Summary:        Xenopsd using libxenlight
+  Group:          Development/Other
+  Requires:       %{name} = %{version}-%{release}
+  
+! %description    xenlight-cov
+  Simple VM manager for Xen using libxenlight with coverage profiling.
+  
+  
+--- 47,102 ----
+  %description
+  Simple VM manager for the xapi toolstack.
+  
+! %package        xc-nocov
+  Summary:        Xenopsd using xc
+  Requires:       %{name} = %{version}-%{release}
+  Requires:       forkexecd
+  Requires:       xen-libs
+  
+! %description    xc-nocov
+  Simple VM manager for Xen using libxc.
+  
+! %package        xc
+  Summary:        Xenopsd using xc
+  Requires:       %{name} = %{version}-%{release}
+  Requires:       forkexecd
+  Requires:       xen-libs
+  
+! %description    xc
+  Simple VM manager for Xen using libxc with coverage
+  profiling.
+  
+  
+! %package        simulator-nocov
+  Summary:        Xenopsd simulator
+  Requires:       %{name} = %{version}-%{release}
+  
+! %description    simulator-nocov
+  A synthetic VM manager for testing.
+  
+! %package        simulator
+  Summary:        Xenopsd simulator
+  Requires:       %{name} = %{version}-%{release}
+  
+! %description    simulator
+  A synthetic VM manager for testing with coverage profiling.
+  
+  
+  
+! %package        xenlight-nocov
+  Summary:        Xenopsd using libxenlight
+  Group:          Development/Other
+  Requires:       %{name} = %{version}-%{release}
+  
+! %description    xenlight-nocov
+  Simple VM manager for Xen using libxenlight
+  
+! %package        xenlight
+  Summary:        Xenopsd using libxenlight
+  Group:          Development/Other
+  Requires:       %{name} = %{version}-%{release}
+  
+! %description    xenlight
+  Simple VM manager for Xen using libxenlight with coverage profiling.
+  
+  
+***************
+*** 178,184 ****
+  
+  # ---
+  
+! %files xc
+  %{_sbindir}/xenopsd-xc.bin
+  %ghost %{_sbindir}/xenopsd-xc
+  %{_sysconfdir}/init.d/xenopsd-xc
+--- 178,184 ----
+  
+  # ---
+  
+! %files xc-nocov
+  %{_sbindir}/xenopsd-xc.bin
+  %ghost %{_sbindir}/xenopsd-xc
+  %{_sysconfdir}/init.d/xenopsd-xc
+***************
+*** 187,193 ****
+  %ghost %{_libexecdir}/%{name}/set-domain-uuid
+  
+  
+! %post xc
+  case $1 in
+    1) # install
+      ln -s %{_sbindir}/xenopsd-xc.bin %{_sbindir}/xenopsd-xc
+--- 187,193 ----
+  %ghost %{_libexecdir}/%{name}/set-domain-uuid
+  
+  
+! %post xc-nocov
+  case $1 in
+    1) # install
+      ln -s %{_sbindir}/xenopsd-xc.bin %{_sbindir}/xenopsd-xc
+***************
+*** 205,211 ****
+      ;;
+  esac
+  
+! %preun xc
+  case $1 in
+    0) # uninstall
+      /sbin/service xenopsd-xc stop >/dev/null 2>&1 || :
+--- 205,211 ----
+      ;;
+  esac
+  
+! %preun xc-nocov
+  case $1 in
+    0) # uninstall
+      /sbin/service xenopsd-xc stop >/dev/null 2>&1 || :
+***************
+*** 215,228 ****
+      ;;
+  esac
+  
+! %files xc-cov
+  %{_sbindir}/xenopsd-xc.cov
+  %{_sysconfdir}/init.d/xenopsd-xc
+  %{_mandir}/man1/xenopsd-xc.1.gz
+  %{_libexecdir}/%{name}/set-domain-uuid.cov
+  %ghost %{_sbindir}/xenopsd-xc
+  
+! %post xc-cov
+  case $1 in
+    1) # install
+      ln -s %{_sbindir}/xenopsd-xc.cov %{_sbindir}/xenopsd-xc
+--- 215,228 ----
+      ;;
+  esac
+  
+! %files xc
+  %{_sbindir}/xenopsd-xc.cov
+  %{_sysconfdir}/init.d/xenopsd-xc
+  %{_mandir}/man1/xenopsd-xc.1.gz
+  %{_libexecdir}/%{name}/set-domain-uuid.cov
+  %ghost %{_sbindir}/xenopsd-xc
+  
+! %post xc
+  case $1 in
+    1) # install
+      ln -s %{_sbindir}/xenopsd-xc.cov %{_sbindir}/xenopsd-xc
+***************
+*** 239,245 ****
+      ;;
+  esac
+  
+! %preun xc-cov
+  case $1 in
+    0) # uninstall
+      /sbin/service xenopsd-xc stop >/dev/null 2>&1 || :
+--- 239,245 ----
+      ;;
+  esac
+  
+! %preun xc
+  case $1 in
+    0) # uninstall
+      /sbin/service xenopsd-xc stop >/dev/null 2>&1 || :
