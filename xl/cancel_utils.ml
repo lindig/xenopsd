@@ -84,7 +84,7 @@ let cancellable_watch key good_watches error_watches (task: Xenops_task.task_han
             with_xs (fun xs -> cancel ~xs key)
          )
          (fun () ->
-            match Watch.wait_for ~xs ~timeout (Watch.any_of
+            match Watch.wait_for ~timeout (Watch.any_of
                                                  ((
                                                    List.map (fun w -> `OK, w) good_watches
                                                  ) @ (
