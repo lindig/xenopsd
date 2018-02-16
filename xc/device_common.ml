@@ -367,19 +367,19 @@ let qmp_send_cmd_internal connection domid cmd =
     | Qmp.Success(None, _)
     | Qmp.Event(_) as resp ->
       let resp' = Qmp.string_of_message resp in
-      info "%s: skipping unexpected QMP response from domid %d: %s"
+      debug "%s: skipping unexpected QMP response from domid %d: %s"
         __LOC__ domid resp';
       wait_for_result id
 
     (* wrong ID *)
     | Qmp.Success(Some id',_) as resp when id <> id' ->
       let resp' = Qmp.string_of_message resp in
-      info "%s: skipping unexpected QMP response from domid %d: %s"
+      debug "%s: skipping unexpected QMP response from domid %d: %s"
         __LOC__ domid resp';
       wait_for_result id
     | Qmp.Error(Some id',_) as resp when id <> id' ->
       let resp' = Qmp.string_of_message resp in
-      info "%s: skipping unexpected QMP response from domid %d: %s"
+      debug "%s: skipping unexpected QMP response from domid %d: %s"
         __LOC__ domid resp';
       wait_for_result id
 
