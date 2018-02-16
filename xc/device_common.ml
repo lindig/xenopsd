@@ -339,19 +339,6 @@ let is_upstream_qemu domid =
     with_xs (fun xs -> xs.Xs.read (sprintf "/libxl/%d/dm-version" domid)) = "qemu_xen"
   with _ -> false
 
-let qmp domid cmd  =
-  let open Qmp in
-  let cmd' = string_of_message cmd in
-  debug "QMP.Command for domid %d: %s" domid cmd';
-  let c = Qmp_protocol.connect (qmp_libxl_path domid) in
-  finally
-    (fun () ->
-       Qmp_protocol.negotiate c;
-       Qmp_protocol.write c cmd;
-       Qmp_protocol.read c
-    )
-    (fun () -> Qmp_protocol.close c)
-
 (** [make_id_generator] returns a function that creates unique IDs using
  * an internal counter *)
 let make_id_generator name =
@@ -360,17 +347,17 @@ let make_id_generator name =
 
 let make_qmp_id = make_id_generator "qmp"
 
-(** [qmp_send_cmd_internal connection omid cmd] sends [cmd] to QEMU, waits
+(** [qmp_send_cmd_internal connection domid cmd] sends [cmd] to QEMU, waits
  * for the *matching* response, and returns the result. It uses an
  * already open and negotiated [connection]. Commands are tagged with an
  * identifier and the function waits for the matching response, skipping
  * all other responses it receives while waiting.
- *)
+*)
 let qmp_send_cmd_internal connection domid cmd =
-  let id   = make_qmp_id domid in
-  let msg  = Qmp.Command(Some id, cmd) in
-  let msg' = Qmp.string_of_message msg in
-  debug "QMP.Command for domid %d: %s" domid msg';
+  let id      = make_qmp_id domid in
+  let msg     = Qmp.Command(Some id, cmd) in
+  let msg'    = Qmp.string_of_message msg in
+  debug "QMP command for domid %d: %s" domid msg';
   let rec wait_for_result id =
     match Qmp_protocol.read connection with
     (* no ID *)
@@ -379,22 +366,22 @@ let qmp_send_cmd_internal connection domid cmd =
     | Qmp.Error(None, _)
     | Qmp.Success(None, _)
     | Qmp.Event(_) as resp ->
-        let resp' = Qmp.string_of_message resp in
-        info "%s: skipping unexpected qmp response from domid %d: %s"
-          __LOC__ domid resp';
-        wait_for_result id
+      let resp' = Qmp.string_of_message resp in
+      info "%s: skipping unexpected QMP response from domid %d: %s"
+        __LOC__ domid resp';
+      wait_for_result id
 
     (* wrong ID *)
     | Qmp.Success(Some id',_) as resp when id <> id' ->
-        let resp' = Qmp.string_of_message resp in
-        info "%s: skipping unexpected qmp response from domid %d: %s"
-          __LOC__ domid resp';
-        wait_for_result id
+      let resp' = Qmp.string_of_message resp in
+      info "%s: skipping unexpected QMP response from domid %d: %s"
+        __LOC__ domid resp';
+      wait_for_result id
     | Qmp.Error(Some id',_) as resp when id <> id' ->
-        let resp' = Qmp.string_of_message resp in
-        info "%s: skipping unexpected qmp response from domid %d: %s"
-          __LOC__ domid resp';
-        wait_for_result id
+      let resp' = Qmp.string_of_message resp in
+      info "%s: skipping unexpected QMP response from domid %d: %s"
+        __LOC__ domid resp';
+      wait_for_result id
 
     (* correct ID *)
     | Qmp.Success(Some _, _) as message -> message
@@ -409,7 +396,7 @@ let qmp_send_cmd_internal connection domid cmd =
  * [qmp_send_cmd] can send optionally a file descriptor [send_fd]
  * over the connection before it sends the command. This is required for
  * some commands.
- *)
+*)
 let qmp_send_cmd ?send_fd domid cmd =
   let connection = Qmp_protocol.connect (qmp_libxl_path domid) in
   finally
@@ -426,14 +413,13 @@ let qmp_send_cmd ?send_fd domid cmd =
        | Qmp.(Success (_, result)) -> result
        | message ->
          let msg' = Qmp.string_of_message message in
-         error "%s: qmp result for domid %d: %s" __LOC__ domid msg';
+         error "%s: QMP result for domid %d: %s" __LOC__ domid msg';
          raise (QMP_Error(domid, msg'))
        | exception e ->
          let cmd' = Qmp.(string_of_message (Command(None,cmd))) in
-         error "%s: writing qmp message '%s' to domain %d: %s"
+         error "%s: sending QMP command '%s' to domain %d: %s"
            __LOC__ cmd' domid (Printexc.to_string e);
          raise (QMP_Error(domid, Printexc.to_string e)))
     (fun () ->
        Qmp_protocol.close connection)
-
 

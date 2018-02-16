@@ -1439,15 +1439,14 @@ module Vusb = struct
     in
     let is_running = Qemu.is_running ~xs domid in
     match is_running with
-    | true  -> (
+    | true  ->
         let cmd = Qmp.(Device_add
           ( "usb-host"
           , id
           , Some (get_bus version, hostbus, hostport)
           ))
         in qmp_send_cmd domid cmd |> ignore
-      )
-    | _ ->()
+    | _ -> ()
 
   let vusb_unplug ~xs ~domid ~id =
     debug "Vusb unplugged: vusb device unplugged";
@@ -1472,11 +1471,11 @@ module Vusb = struct
     match is_running with
     | true  ->
         let path = "/machine/peripheral" in
-        qmp_send_cmd domid Qmp.(Qom_list (path))
+        qmp_send_cmd domid Qmp.(Qom_list path)
         |> ( function
            | Qmp.(Qom usbs) -> List.map (fun p -> p.Qmp.name) usbs
            | other ->
-               debug "%s unexpected qmp result for domid %d Qom_list"
+               debug "%s unexpected QMP result for domid %d Qom_list"
                __LOC__ domid;
                []
            )
@@ -2000,7 +1999,7 @@ module Backend = struct
                    | other ->
                      raise (Internal_error
                               (sprintf
-                                 "Get unexpected result after sending Qmp message: %s"
+                                 "Unexpected result for QMP command: %s"
                                  Qmp.(other |> as_msg |> string_of_message))) in
                  finally
                    (fun () ->
@@ -2013,7 +2012,7 @@ module Backend = struct
                  (fun () ->
                     Unix.close fd_cd)
           with
-          | Unix.Unix_error(Unix.ECONNREFUSED, "connect", p) -> raise(Internal_error (Printf.sprintf "Failed to connnect qmp socket: %s" p))
+          | Unix.Unix_error(Unix.ECONNREFUSED, "connect", p) -> raise(Internal_error (Printf.sprintf "Failed to connnect QMP socket: %s" p))
           | Unix.Unix_error(Unix.ENOENT, "open", p) -> raise(Internal_error (Printf.sprintf "Failed to open CD Image: %s" p))
           | Internal_error(_) as e -> raise e
           | e -> raise(Internal_error (Printf.sprintf "Get unexpected error trying to change CD: %s" (Printexc.to_string e)))
@@ -2068,7 +2067,7 @@ module Backend = struct
                  Monitor.remove m (Qmp_protocol.to_fd c);
                  debug "Removed QMP Event fd for domain %d" domid)
               (fun () -> Qmp_protocol.close c)
-          with e -> debug_exn (Printf.sprintf "Got exception trying to remove qmp on domain-%d" domid) e
+          with e -> debug_exn (Printf.sprintf "Got exception trying to remove QMP on domain-%d" domid) e
 
         let add domid =
           try
@@ -2135,13 +2134,13 @@ module Backend = struct
                       | Event e -> qmp_event_handle domid e
                       | msg -> debug "Got non-event message, domain-%d: %s" domid (string_of_message msg)
                     with End_of_file ->
-                      debug "domain-%d: end of file, close qmp socket" domid;
+                      debug "domain-%d: end of file, close QMP socket" domid;
                       remove domid
                        | e ->
-                         debug_exn (Printf.sprintf "domain-%d: close qmp socket" domid) e;
+                         debug_exn (Printf.sprintf "domain-%d: close QMP socket" domid) e;
                          remove domid
                   else begin
-                    debug "EPOLL error on domain-%d, close qmp socket" domid;
+                    debug "EPOLL error on domain-%d, close QMP socket" domid;
                     remove domid
                   end
                 )
@@ -2172,7 +2171,7 @@ module Backend = struct
               | Qmp.(Fd_info fd) -> fd
               | other ->
                   raise (Internal_error (sprintf
-                    "Get unexpected result after sending Qmp message: %s"
+                    "Unexpected result for QMP command: %s"
                     Qmp.(other |> as_msg |> string_of_message)))
             in
             finally
