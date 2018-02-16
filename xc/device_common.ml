@@ -353,12 +353,14 @@ let make_qmp_id = make_id_generator "qmp"
  * identifier and the function waits for the matching response, skipping
  * all other responses it receives while waiting.
 *)
-let qmp_send_cmd_internal connection domid cmd =
+let qmp_send_cmd_internal connection deadline domid cmd =
   let id      = make_qmp_id domid in
   let msg     = Qmp.Command(Some id, cmd) in
   let msg'    = Qmp.string_of_message msg in
   debug "QMP command for domid %d: %s" domid msg';
-  let rec wait_for_result id =
+  let rec wait_for_result deadline id =
+    if Mtime.is_later (Mtime_clock.now ()) ~than:deadline then
+      raise (QMP_Error(domid, sprintf "timeout waiting for response %s" id));
     match Qmp_protocol.read connection with
     (* no ID *)
     | Qmp.Greeting(_)
@@ -369,26 +371,26 @@ let qmp_send_cmd_internal connection domid cmd =
       let resp' = Qmp.string_of_message resp in
       debug "%s: skipping unexpected QMP response from domid %d: %s"
         __LOC__ domid resp';
-      wait_for_result id
+      wait_for_result deadline id
 
     (* wrong ID *)
     | Qmp.Success(Some id',_) as resp when id <> id' ->
       let resp' = Qmp.string_of_message resp in
       debug "%s: skipping unexpected QMP response from domid %d: %s"
         __LOC__ domid resp';
-      wait_for_result id
+      wait_for_result deadline id
     | Qmp.Error(Some id',_) as resp when id <> id' ->
       let resp' = Qmp.string_of_message resp in
       debug "%s: skipping unexpected QMP response from domid %d: %s"
         __LOC__ domid resp';
-      wait_for_result id
+      wait_for_result deadline id
 
     (* correct ID *)
     | Qmp.Success(Some _, _) as message -> message
     | Qmp.Error(Some _,_)    as message -> message
   in
   Qmp_protocol.write connection msg;
-  wait_for_result id
+  wait_for_result deadline id
 
 (* [qmp_send_cmd domid cmd] sends [cmd] to [domid] and checks that the
  * result it returns is Success. Otherwise it will raise [QMP_Error].
@@ -399,6 +401,16 @@ let qmp_send_cmd_internal connection domid cmd =
 *)
 let qmp_send_cmd ?send_fd domid cmd =
   let connection = Qmp_protocol.connect (qmp_libxl_path domid) in
+  let timeout    = 600.0 in (** seconds *)
+  let deadline   =
+    timeout *. Mtime.s_to_ns
+    |> Int64.of_float
+    |> Mtime.Span.of_uint64_ns
+    |> (fun ns -> Mtime.add_span (Mtime_clock.now ()) ns)
+    |> function
+    | Some deadline -> deadline
+    | None -> raise (QMP_Error(domid, "time span overflow"))
+  in
   finally
     (fun () ->
        Qmp_protocol.negotiate connection;
@@ -409,7 +421,7 @@ let qmp_send_cmd ?send_fd domid cmd =
          | None    -> ()
        )
        ;
-       match qmp_send_cmd_internal connection domid cmd with
+       match qmp_send_cmd_internal connection deadline domid cmd with
        | Qmp.(Success (_, result)) -> result
        | message ->
          let msg' = Qmp.string_of_message message in
