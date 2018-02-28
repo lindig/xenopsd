@@ -1680,6 +1680,123 @@ module Dm_Common = struct
     in
     disp_options, wait_for_port
 
+
+  let return = Fe_argv.return
+  let (>>=) = Fe_argv.bind
+  let vga x =
+    let open Xenops_interface.Vgpu in
+    match x with
+    | Vgpu [{implementation = Nvidia _}]    -> Fe_argv.Add.arg "-vgpu"
+    | Vgpu [{implementation = GVT_g gvt_g}] ->
+      Fe_argv.Add.many
+        [ "-xengt"
+        ; "-vgt_low_gm_sz"  ; Int64.to_string gvt_g.low_gm_sz
+        ; "-vgt_high_gm_sz" ; Int64.to_string gvt_g.high_gm_sz
+        ; "-vgt_fence_sz"   ; Int64.to_string gvt_g.fence_sz
+        ] >>= fun () ->
+      Fe_argv.Add.many
+        begin match gvt_g.monitor_config_file with
+          | Some path -> ["-vgt_monitor_config_file"; path]
+          | None      -> []
+        end >>= fun () ->
+      Fe_argv.Add.arg "-priv"
+    | Std_vga   -> Fe_argv.Add.arg "-std-vga"
+    | Cirrus    -> return ()
+    | GVT_d     -> Fe_argv.Add.many ["-std-vga"; "-gfx_passthru"]
+    | Vgpu [{implementation = MxGPU mxgpu}] -> return ()
+    | Vgpu _    -> failwith "Unsupported vGPU configuration"
+
+  let videoram info =
+    Fe_argv.Add.many ["-videoram"; string_of_int info.video_mib]
+
+  let vnc ip_addr_opt auto port keymap domid =
+    let ip_addr = Opt.default "127.0.0.1" ip_addr_opt in
+    let unused_opt, vnc_arg = match domid with
+      | None when auto ->
+        ["-vncunused"], Printf.sprintf "%s:1"  ip_addr
+      | None ->
+        []            , Printf.sprintf "%s:%d" ip_addr port
+      (* Disable lock-key-sync lock-key-sync expects vnclient to
+          send different keysym for alphabet keys (different for
+          lowercase and uppercase). XC can't do it at the moment,
+          so disable lock-key-sync *)
+      | Some domid ->
+        []            , Printf.sprintf "%s,lock-key-sync=off"
+          (Socket.Unix.path (vnc_socket_path domid))
+    in
+    Fe_argv.Add.many unused_opt        >>= fun () ->
+    Fe_argv.Add.many ["-vnc"; vnc_arg] >>= fun () ->
+    match keymap with
+    | Some k -> Fe_argv.Add.many ["-k"; k]
+    | None   -> return ()
+
+
+  let disks info =
+    info.disks
+    |> Fe_argv.Add.each (fun (index, file, media) ->
+        [ "-drive"
+        ; sprintf "file=%s,if=ide,index=%d,media=%s"
+            file index (string_of_media media)
+        ])
+
+  let display info domid =
+    match info.disp with
+    | NONE                 -> return ()
+    | SDL(_opts, _x11name) -> return ()
+    | VNC (disp_intf, ip, auto, port, keymap) ->
+      vga disp_intf >>= fun () ->
+      videoram info >>= fun () ->
+      vnc ip auto port keymap domid
+
+  let acpi info =
+    if info.acpi then Fe_argv.Add.arg "-acpi" else return ()
+
+  let restore' domid yes =
+    let restorefile = sprintf qemu_restore_path domid in
+    if yes
+    then Fe_argv.Add.many ["-loadvm"; restorefile]
+    else return ()
+
+  let pci_emulation info =
+    info.pci_emulations
+    |> Fe_argv.Add.each (fun pci -> ["-pciemulation"; pci])
+
+  let pci_passthrough info =
+    if info.pci_passthrough
+    then Fe_argv.Add.arg "-priv"
+    else return ()
+
+  let extras info =
+    info.extras
+    |> Fe_argv.Add.each
+      ( function
+        | key, None       -> ["-"^key]
+        | key, Some value -> ["-"^key ; value]
+      )
+
+  let monitor info =
+    match info.monitor with
+    | None   -> return ()
+    | Some x -> Fe_argv.Add.many ["-monitor"; x]
+
+  let qemu_args' ~xs ~dm info restore ?(domid_for_vnc=false) domid =
+    let domid' = if domid_for_vnc then Some domid else None in
+    let args =
+      disks info                         >>= fun () ->
+      display info domid'                >>= fun () ->
+      acpi info                          >>= fun () ->
+      restore' domid restore             >>= fun () ->
+      pci_emulation info                 >>= fun () ->
+      pci_passthrough info               >>= fun () ->
+      extras info                        >>= fun () ->
+      monitor info
+    in
+    (* convert to legacy type *)
+    let (),args = Fe_argv.run args in
+    { argv   = Fe_argv.argv args
+    ; fd_map = Fe_argv.fd_map args
+    }
+
   let qemu_args ~xs ~dm info restore ?(domid_for_vnc=false) domid =
     let disks' = List.map (fun (index, file, media) -> [
           "-drive"; sprintf "file=%s,if=ide,index=%d,media=%s" file index (string_of_media media)
@@ -1711,6 +1828,29 @@ module Dm_Common = struct
     { argv   = argv
     ; fd_map = []
     }
+
+  let vnc_only ~info ?(extras=[]) domid =
+    Fe_argv.Add.many 
+      [ "-d"; string_of_int domid
+      ; "-M"; "xenpv" 
+      ] >>= fun () ->
+    display info None >>= fun () ->
+    Fe_argv.Add.each 
+      (function 
+        | (k, None  ) -> ["-"^k]
+        | (k, Some v) -> ["-"^k; v]
+      ) extras
+
+  let vgpu domid vcpus (vgpu:Xenops_interface.Vgpu.nvidia) pci restore =
+    let suspend_file = sprintf demu_save_path domid in
+    Fe_argv.Add.many 
+      [ "--domain="  ^ (string_of_int domid)
+      ; "--vcpus="   ^ (string_of_int vcpus)
+      ; "--gpu="     ^ (Xenops_interface.Pci.string_of_address pci)
+      ; "--config="  ^ vgpu.Xenops_interface.Vgpu.config_file
+      ; "--suspend=" ^ suspend_file
+      ] >>= fun () ->
+    if restore then Fe_argv.Add.arg "--resume" else return ()
 
   let vnconly_cmdline ~info ?(extras=[]) domid =
     let disp_options, _ = cmdline_of_disp info in
