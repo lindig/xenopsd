@@ -204,6 +204,7 @@ module VM_DB = struct
          then Updates.add (Dynamic.Vm id) updates
       )
   let remove id =
+    debug "XSI-555 VM_DB.remove %s" id;
     Mutex.execute m
       (fun () ->
          Updates.remove (Dynamic.Vm id) updates;
