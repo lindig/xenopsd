@@ -207,7 +207,11 @@ module VM_DB = struct
     debug "XSI-555 VM_DB.remove %s" id;
     Mutex.execute m
       (fun () ->
-         Updates.remove (Dynamic.Vm id) updates;
+         (* don't remove any pending updates because concurrent operations
+          * might depend on them XSI-555
+          * Updates.remove (Dynamic.Vm id) updates;
+          *)
+         debug "XSI-555 VM_DB.remove NOT removing updates for %s" id;
          remove id
       )
 end
